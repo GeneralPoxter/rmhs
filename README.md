@@ -24,7 +24,7 @@ Available options:
   -i,--interactive         Prompts before removing protected files
   -h,--help                Show this help text
 ```
-### Manual usage
+### Manual protection
 * Protect the directory `[path to directory]` by creating `[path to directory]/.hsield`  
 (note that this will only protect the directory from removal, but not necessarily its contents from individual removal)  
 * Protect the file `[filename + extension]` by creating `.hsield-[filename + extension]` in the same parent directory
