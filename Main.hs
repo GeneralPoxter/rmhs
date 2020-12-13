@@ -1,8 +1,6 @@
 import Control.Exception
 import Control.Monad
 import Data.List
-import Data.Set (Set)
-import qualified Data.Set as S
 import Options.Applicative
 import System.Directory
 import System.Directory.Internal.Prelude
@@ -70,6 +68,24 @@ main = execParser totalParser >>= runProg
             <> header "rmhs - A safe rm command"
         )
 
+data ObjectType = File | Directory | Neither
+
+data Object = Object ObjectType FilePath
+
+classify :: FilePath -> IO Object
+classify f = do
+  isFile <- doesFileExist f
+  if isFile
+    then return $ Object File f
+    else do
+      isDirectory <- doesDirectoryExist f
+      if isDirectory
+        then return $ Object Directory f
+        else return $ Object Neither f
+
+objMap :: Foldable t => Options -> (Options -> Object -> IO ()) -> t FilePath -> IO ()
+objMap opts m = mapM_ (m opts <=< classify)
+
 createFile :: FilePath -> IO ()
 createFile name = writeFile name ""
 
@@ -90,19 +106,12 @@ printIfVerbose opts s
   | optVerbose opts = putStrLn s
   | otherwise = return ()
 
-genName :: FilePath -> IO FilePath
-genName f = do
-  isFile <- doesFileExist f
-  if isFile
-    then
-      if isHsield f
-        then return "/"
-        else return $ takeDirectory f </> ".hsield-" ++ takeFileName f
-    else do
-      isDirectory <- doesDirectoryExist f
-      if isDirectory
-        then return $ f </> ".hsield"
-        else return ""
+genName :: Object -> FilePath
+genName (Object File f)
+  | isHsield f = "/"
+  | otherwise = takeDirectory f </> ".hsield-" ++ takeFileName f
+genName (Object Directory f) = f </> ".hsield"
+genName (Object Neither f) = ""
 
 gracefulRemove :: Options -> (FilePath -> IO ()) -> FilePath -> IO ()
 gracefulRemove opts m f = do
@@ -111,54 +120,40 @@ gracefulRemove opts m f = do
     Left e -> putStrLn $ concat ["Could not remove ", f, ": ", prettyPrintError e]
     Right v -> printIfVerbose opts $ "Removed " ++ f
 
-doesProtectionExist :: FilePath -> IO Bool
-doesProtectionExist f = do
-  name <- genName f
-  doesFileExist name
+doesProtectionExist :: Object -> IO Bool
+doesProtectionExist = doesFileExist . genName
 
-protect :: Options -> FilePath -> IO ()
-protect opts f = do
-  name <- genName f
-  if name == ""
-    then putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
-    else
-      if name == "/"
-        then putStrLn "Error: cannot protect .hsield files"
-        else do
-          createFile name
-          printIfVerbose opts $ "Protected " ++ f
+protect :: Options -> Object -> IO ()
+protect opts (Object t f)
+  | name == "" = putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
+  | name == "/" = putStrLn "Error: cannot protect .hsield files"
+  | otherwise = do
+    createFile name
+    printIfVerbose opts $ "Protected " ++ f
+  where
+    name = genName $ Object t f
 
-unprotect :: Options -> FilePath -> IO ()
-unprotect opts f = do
-  isProtected <- doesProtectionExist f
+unprotect :: Options -> Object -> IO ()
+unprotect opts o = do
+  isProtected <- doesProtectionExist o
   if isProtected
-    then do
-      name <- genName f
-      gracefulRemove opts removeFile name
+    then gracefulRemove opts removeFile $ genName o
     else putStrLn $ concat ["Error: ", f, " is not protected"]
+  where
+    Object _ f = o
 
-forceRemove :: Options -> FilePath -> IO ()
-forceRemove opts f = do
-  isFile <- doesFileExist f
-  if isFile
-    then do
-      isProtected <- doesProtectionExist f
-      when (not (optKeep opts) && isProtected) $ do
-        name <- genName f
-        gracefulRemove opts removeFile name
-      gracefulRemove opts removeFile f
-    else do
-      isDirectory <- doesDirectoryExist f
-      if isDirectory
-        then do
-          listing <- filterListDirectory f
-          mapM_ (forceRemove opts . combine f) listing
-          listing <- filterListDirectory f
-          when (null listing) $ do
-            listing <- listDirectory f
-            mapM_ (forceRemove opts . combine f) listing
-            gracefulRemove opts removeDirectory f
-        else putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
+forceRemove :: Options -> Object -> IO ()
+forceRemove opts (Object File f) = do
+  isProtected <- doesProtectionExist $ Object File f
+  when (not (optKeep opts) && isProtected) $ gracefulRemove opts removeFile $ genName $ Object File f
+  gracefulRemove opts removeFile f
+forceRemove opts (Object Directory f) = do
+  filterListDirectory f >>= objMap opts forceRemove . fmap (combine f)
+  listing <- filterListDirectory f
+  when (null listing) $ do
+    listDirectory f >>= objMap opts forceRemove . fmap (combine f)
+    gracefulRemove opts removeDirectory f
+forceRemove _ (Object Neither f) = putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
 
 prompt :: String -> IO String
 prompt text = do
@@ -166,41 +161,41 @@ prompt text = do
   hFlush stdout
   getLine
 
-promptRemove :: Options -> FilePath -> IO ()
-promptRemove opts f = do
-  isProtected <- doesProtectionExist f
+promptRemove :: Options -> Object -> IO ()
+promptRemove opts o = do
+  isProtected <- doesProtectionExist o
   if isProtected
-    then do
-      isFile <- doesFileExist f
-      if isFile
-        then do
-          res <- prompt $ concat ["Remove protected file ", f, "? [Y/n] "]
-          when (res == "Y") $ forceRemove opts f
-        else do
-          isDirectory <- doesDirectoryExist f
-          if isDirectory
-            then do
-              res <- prompt $ concat ["Remove protected directory ", f, "? [Y/n] "]
-              when (res == "Y") $ do
-                listing <- filterListDirectory f
-                mapM_ (promptRemove opts . combine f) listing
-                listing <- filterListDirectory f
-                when (null listing) $ forceRemove opts f
-            else putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
-    else forceRemove opts f
+    then case t of
+      File -> do
+        res <- prompt $ concat ["Remove protected file ", f, "? [Y/n] "]
+        when (res == "Y") $ forceRemove opts o
+      Directory -> do
+        res <- prompt $ concat ["Remove protected directory ", f, "? [Y/n] "]
+        when (res == "Y") $ do
+          filterListDirectory f >>= objMap opts promptRemove . fmap (combine f)
+          listing <- filterListDirectory f
+          when (null listing) $ forceRemove opts o
+      Neither -> putStrLn $ concat ["Error: ", f, " is neither a file nor a directory"]
+    else forceRemove opts o
+  where
+    Object t f = o
 
-safeRemove :: Options -> FilePath -> IO ()
-safeRemove opts f = do
-  isProtected <- doesProtectionExist f
+safeRemove :: Options -> Object -> IO ()
+safeRemove opts o = do
+  isProtected <- doesProtectionExist o
   if isProtected
     then do printIfVerbose opts $ concat ["Protected: ", f, " was not removed"]
-    else forceRemove opts f
+    else forceRemove opts o
+  where
+    Object _ f = o
 
 runProg :: Options -> IO ()
 runProg opts
   | optVersion opts = putStrLn "0.1"
-  | optProtect opts = mapM_ (protect opts) $ optFiles opts
-  | optUnprotect opts = mapM_ (unprotect opts) $ optFiles opts
-  | optForce opts = mapM_ (forceRemove opts) $ optFiles opts
-  | optPrompt opts = mapM_ (promptRemove opts) $ optFiles opts
-  | otherwise = mapM_ (safeRemove opts) $ optFiles opts
+  | optProtect opts = objMap opts protect files
+  | optUnprotect opts = objMap opts unprotect files
+  | optForce opts = objMap opts forceRemove files
+  | optPrompt opts = objMap opts promptRemove files
+  | otherwise = objMap opts safeRemove files
+  where
+    files = optFiles opts
