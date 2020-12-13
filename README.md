@@ -3,7 +3,7 @@
 rmhs is a safe rm command written in Haskell
 
 ## Installation
-Install [stack](https://github.com/commercialhaskell/stack) and run `stack install` (make sure your local bin is in PATH)
+Clone the repo, install [stack](https://github.com/commercialhaskell/stack), and run `stack install` (make sure your local bin is in PATH)
 
 ## Instructions
 ### Command usage
@@ -25,8 +25,9 @@ Available options:
   -h,--help                Show this help text
 ```
 ### Manual usage
-Protect the directory `[path to directory]` by creating `[path to directory]/.hsield`. (note that this will only protect the directory from removal but not necessarily its contents from individual removal)  
-Protect the file `[filename + extension]` by creating `.hsield-[filename + extension]` in the same parent directory.
+* Protect the directory `[path to directory]` by creating `[path to directory]/.hsield`  
+(note that this will only protect the directory from removal, but not necessarily its contents from individual removal)  
+* Protect the file `[filename + extension]` by creating `.hsield-[filename + extension]` in the same parent directory
 
 ## Development
-GeneralPoxter and Aplet123
+[GeneralPoxter](https://github.com/GeneralPoxter) and [Aplet123](https://aplet.me/)
