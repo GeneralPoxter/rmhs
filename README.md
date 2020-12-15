@@ -3,8 +3,8 @@
 rmhs is a safe rm command written in Haskell
 
 ## Installation
-Clone the repo, install [stack](https://github.com/commercialhaskell/stack), and run `stack install` (make sure your local bin is in PATH)
-OR
+Clone the repo, install [stack](https://github.com/commercialhaskell/stack), and run `stack install` (make sure your local bin is in PATH)  
+OR  
 Download binaries from [Releases](https://github.com/GeneralPoxter/rmhs/releases) page
 
 ## Instructions
