@@ -27,9 +27,9 @@ Available options:
   -h,--help                Show this help text
 ```
 ### Manual protection
-* Protect the directory `[path to directory]` by creating `[path to directory]/.hsield`  
+* Protect the directory `[path to directory]` by creating `[path to directory]/.shield`  
 (note that this will only protect the directory from removal, but not necessarily its contents from individual removal)  
-* Protect the file `[filename + extension]` by creating `.hsield-[filename + extension]` in the same parent directory
+* Protect the file `[filename + extension]` by creating `.shield-[filename + extension]` in the same parent directory
 
 ## Development
 [GeneralPoxter](https://github.com/GeneralPoxter) and [Aplet123](https://aplet.me/)
