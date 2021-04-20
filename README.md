@@ -32,4 +32,4 @@ Available options:
 * Protect the file `[filename + extension]` by creating `.shield-[filename + extension]` in the same parent directory
 
 ## Development
-[GeneralPoxter](https://github.com/GeneralPoxter) and [Aplet123](https://aplet.me/)
+[GeneralPoxter](https://generalpoxter.github.io/) and [Aplet123](https://aplet.me/)
